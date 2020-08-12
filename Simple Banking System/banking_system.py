@@ -6,17 +6,36 @@ cards = []
 
 
 class Card:
-    MII = '4'  # Major Industry Identifier
-    IIN = '400000'  # Issuer Identification Number
-    cards = {}
+    BIN = '400000'  # Bank Identification Number
 
     def __init__(self):
-        self.account_number = ''.join(random.sample(string.digits, 9))
-        self.checksum = str(random.choice(string.digits))
-        self.card_number = self.IIN + self.account_number + self.checksum
-        self.card_pin = ''.join(random.sample(string.digits, 4))
-        self.cards[self.card_number] = self.card_pin
+        self.account_id = self.generate_account_id()
+        self.checksum = self.calc_checksum()
+        self.card_number = self.BIN + self.account_id + self.checksum
+        self.card_pin = self.generate_card_pin()
         self.balance = 0
+        cards.append(self)
+
+    @staticmethod
+    def generate_account_id():
+        return ''.join(random.sample(string.digits, 9))
+
+    @staticmethod
+    def generate_card_pin():
+        return ''.join(random.sample(string.digits, 4))
+
+    def calc_checksum(self):
+        control_number = self.calc_control_number()
+        return '0' if control_number % 10 == 0 else str(10 - control_number % 10)
+
+    # uses Luhn algorithm to calculate control number for finding checksum
+    def calc_control_number(self):
+        number = self.BIN + self.account_id
+        number = [int(x) * 2 if (i + 1) % 2 != 0 else int(x)
+                  for i, x in enumerate(number)]
+        number = [x - 9 if x > 9 else x for x in number]
+        control_number = sum(number)
+        return control_number
 
     def get_card_number(self):
         return self.card_number
@@ -39,7 +58,7 @@ def main_menu():
                                  '2. Log into account\n'
                                  '0. Exit\n'))
         if user_command == 1:
-            cards.append(create_new_card())
+            create_new_card()
         elif user_command == 2:
             log_in()
         elif user_command == 0:
@@ -57,10 +76,10 @@ def create_new_card():
 def log_in():
     card_number = input('\nEnter your card number:\n')
     card_pin = input('Enter your PIN:\n')
+    current_card = get_current_card(card_number, card_pin)
 
-    if card_number in Card.cards and card_pin == Card.cards[card_number]:
+    if current_card is not None:
         print('\nYou have successfully logged in!\n')
-        current_card = get_current_card(card_number, card_pin)
         log_in_menu(current_card)
 
     print('\nWrong card number or PIN!\n')
