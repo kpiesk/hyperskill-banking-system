@@ -1,27 +1,38 @@
 import random
 import string
+import sqlite3
 
 
-cards = []
+conn = sqlite3.connect('card.s3db')
+cur = conn.cursor()
 
 
 class Card:
     BIN = '400000'  # Bank Identification Number
 
     def __init__(self):
+        self.record_id = self.get_record_id()
         self.account_id = self.generate_account_id()
         self.checksum = self.calc_checksum()
         self.card_number = self.BIN + self.account_id + self.checksum
         self.card_pin = self.generate_card_pin()
         self.balance = 0
-        cards.append(self)
+        self.insert_into_database()
+
+    @staticmethod
+    def get_record_id():
+        cur.execute('SELECT MAX(id) FROM card')
+        max_id = cur.fetchone()
+        return max_id[0] + 1 if max_id[0] is not None else 1
 
     @staticmethod
     def generate_account_id():
+        random.seed()
         return ''.join(random.sample(string.digits, 9))
 
     @staticmethod
     def generate_card_pin():
+        random.seed()
         return ''.join(random.sample(string.digits, 4))
 
     def calc_checksum(self):
@@ -37,22 +48,17 @@ class Card:
         control_number = sum(number)
         return control_number
 
-    def get_card_number(self):
-        return self.card_number
-
-    def get_card_pin(self):
-        return self.card_pin
-
     def get_card_info(self):
         print(f'Your card number:\n{self.card_number}\n'
               f'Your card PIN:\n{self.card_pin}\n')
 
-    def get_card_balance(self):
-        print(f'\nBalance: {self.balance}\n')
+    def insert_into_database(self):
+        cur.execute('INSERT INTO card VALUES(?, ?, ?, ?)',
+                    (self.record_id, self.card_number, self.card_pin, self.balance))
+        conn.commit()
 
 
 def main_menu():
-    global cards
     while True:
         user_command = int(input('1. Create an account\n'
                                  '2. Log into account\n'
@@ -70,29 +76,30 @@ def create_new_card():
     new_card = Card()
     print('\nYour card has been created')
     new_card.get_card_info()
-    return new_card
 
 
 def log_in():
     card_number = input('\nEnter your card number:\n')
     card_pin = input('Enter your PIN:\n')
-    current_card = get_current_card(card_number, card_pin)
 
-    if current_card is not None:
+    cur.execute('SELECT pin FROM card WHERE number=?', (card_number,))
+    correct_pin = cur.fetchone()
+
+    if correct_pin is not None and card_pin == correct_pin[0]:
         print('\nYou have successfully logged in!\n')
-        log_in_menu(current_card)
+        log_in_menu(card_number)
+    else:
+        print('\nWrong card number or PIN!\n')
+        main_menu()
 
-    print('\nWrong card number or PIN!\n')
-    main_menu()
 
-
-def log_in_menu(current_card):
+def log_in_menu(card_number):
     while True:
         user_command = int(input('1. Balance\n'
                                  '2. Log out\n'
                                  '0. Exit\n'))
         if user_command == 1:
-            get_card_balance(current_card)
+            get_card_balance(card_number)
         elif user_command == 2:
             print('\nYou have successfully logged out\n')
             main_menu()
@@ -101,16 +108,17 @@ def log_in_menu(current_card):
             exit()
 
 
-def get_current_card(card_number, card_pin):
-    for card in cards:
-        if card_number == card.get_card_number() \
-                and card_pin == card.get_card_pin():
-            return card
-    return None
+def get_card_balance(card_number):
+    cur.execute('SELECT balance FROM card WHERE number=?', (card_number,))
+    print(f'\nBalance: {cur.fetchone()[0]}\n')
 
 
-def get_card_balance(current_card):
-    current_card.get_card_balance()
+def create_database():
+    cur.execute('CREATE TABLE IF NOT EXISTS card '
+                '(id INTEGER, number TEXT, pin TEXT, '
+                'balance INTEGER DEFAULT  0);')
+    conn.commit()
 
 
+create_database()
 main_menu()
