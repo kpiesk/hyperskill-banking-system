@@ -3,8 +3,7 @@ import string
 import sqlite3
 
 
-conn = sqlite3.connect('card.s3db')
-cur = conn.cursor()
+global conn, cur
 
 
 class Card:
@@ -13,7 +12,7 @@ class Card:
     def __init__(self):
         self.record_id = self.get_record_id()
         self.account_id = self.generate_account_id()
-        self.checksum = self.calc_checksum()
+        self.checksum = self.get_checksum()
         self.card_number = self.BIN + self.account_id + self.checksum
         self.card_pin = self.generate_card_pin()
         self.balance = 0
@@ -35,18 +34,9 @@ class Card:
         random.seed()
         return ''.join(random.sample(string.digits, 4))
 
-    def calc_checksum(self):
-        control_number = self.calc_control_number()
-        return '0' if control_number % 10 == 0 else str(10 - control_number % 10)
-
-    # uses Luhn algorithm to calculate control number for finding checksum
-    def calc_control_number(self):
+    def get_checksum(self):
         number = self.BIN + self.account_id
-        number = [int(x) * 2 if (i + 1) % 2 != 0 else int(x)
-                  for i, x in enumerate(number)]
-        number = [x - 9 if x > 9 else x for x in number]
-        control_number = sum(number)
-        return control_number
+        return calc_checksum(number)
 
     def get_card_info(self):
         print(f'Your card number:\n{self.card_number}\n'
@@ -96,11 +86,21 @@ def log_in():
 def log_in_menu(card_number):
     while True:
         user_command = int(input('1. Balance\n'
-                                 '2. Log out\n'
+                                 '2. Add income\n'
+                                 '3. Do transfer\n'
+                                 '4. Close account\n'
+                                 '5. Log out\n'
                                  '0. Exit\n'))
         if user_command == 1:
             get_card_balance(card_number)
         elif user_command == 2:
+            add_balance(card_number, input('\nEnter income:\n'))
+            print('Income was added!\n')
+        elif user_command == 3:
+            transfer_money(card_number, input('\nTransfer\nEnter card number:\n'))
+        elif user_command == 4:
+            close_account(card_number)
+        elif user_command == 5:
             print('\nYou have successfully logged out\n')
             main_menu()
         elif user_command == 0:
@@ -113,11 +113,76 @@ def get_card_balance(card_number):
     print(f'\nBalance: {cur.fetchone()[0]}\n')
 
 
-def create_database():
-    cur.execute('CREATE TABLE IF NOT EXISTS card '
-                '(id INTEGER, number TEXT, pin TEXT, '
-                'balance INTEGER DEFAULT  0);')
+def add_balance(card_number, money):
+    cur.execute('UPDATE card SET balance = balance+? WHERE number=?',
+                (money, card_number))
     conn.commit()
+
+
+def transfer_money(sender_card, receiver_card):
+    if calc_checksum(receiver_card[:-1]) != receiver_card[-1]:
+        print('Probably you made mistake in the card number. Please try again!\n')
+    elif not check_card_exists(receiver_card):
+        print('Such a card does not exist.\n')
+    elif check_card_same(sender_card, receiver_card):
+        print('You can\'t transfer money to the same account!\n')
+    else:
+        money = float(input('Enter how much money you want to transfer:\n'))
+
+        cur.execute('SELECT balance FROM card WHERE number=?', (sender_card,))
+        if cur.fetchone()[0] < money:
+            print('Not enough money!\n')
+        else:
+            add_balance(receiver_card, money)
+            add_balance(sender_card, -1 * money)
+            print('Success!\n')
+
+
+def calc_checksum(number):
+    number = [int(x) * 2 if (i + 1) % 2 != 0 else int(x)
+              for i, x in enumerate(number)]
+    number = [x - 9 if x > 9 else x for x in number]
+    control_number = sum(number)
+    return '0' if control_number % 10 == 0 else str(10 - control_number % 10)
+
+
+def check_card_exists(card_number):
+    cur.execute('SELECT number FROM card WHERE number=?', (card_number,))
+    if cur.fetchone() is None:
+        return False
+    return True
+
+
+def check_card_same(sender_card, receiver_card):
+    if sender_card == receiver_card:
+        return True
+    return False
+
+
+def close_account(card_number):
+    cur.execute('DELETE FROM card WHERE number=?', (card_number,))
+    conn.commit()
+    print('\nThe account has been closed!\n')
+
+
+def create_database():
+    global cur, conn
+    conn = sqlite3.connect('card.s3db')
+    cur = conn.cursor()
+    with conn:
+        cur.execute('CREATE TABLE IF NOT EXISTS card '
+                    '(id INTEGER, number TEXT, pin TEXT, '
+                    'balance INTEGER DEFAULT  0);')
+
+
+def delete_table():
+    cur.execute('DROP TABLE card')
+    conn.commit()
+
+
+def print_table():
+    for row in cur.execute('SELECT * FROM card'):
+        print(row)
 
 
 create_database()
