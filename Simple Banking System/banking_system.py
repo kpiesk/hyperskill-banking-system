@@ -53,14 +53,14 @@ class Card:
 # the main menu of the banking system
 def main_menu():
     while True:
-        user_command = int(input('1. Create an account\n'
-                                 '2. Log into account\n'
-                                 '0. Exit\n'))
-        if user_command == 1:
+        user_command = input('1. Create an account\n'
+                             '2. Log into account\n'
+                             '0. Exit\n')
+        if user_command == '1':
             create_new_card()
-        elif user_command == 2:
+        elif user_command == '2':
             log_in()
-        elif user_command == 0:
+        elif user_command == '0':
             print('\nBye!')
             exit()
 
@@ -92,26 +92,26 @@ def log_in():
 # (is only shown once successfully logged in)
 def log_in_menu(card_number):
     while True:
-        user_command = int(input('1. Balance\n'
-                                 '2. Add income\n'
-                                 '3. Do transfer\n'
-                                 '4. Close account\n'
-                                 '5. Log out\n'
-                                 '0. Exit\n'))
-        if user_command == 1:
+        user_command = input('1. Balance\n'
+                             '2. Add income\n'
+                             '3. Do transfer\n'
+                             '4. Close account\n'
+                             '5. Log out\n'
+                             '0. Exit\n')
+        if user_command == '1':
             get_card_balance(card_number)
-        elif user_command == 2:
+        elif user_command == '2':
             add_balance(card_number, input('\nEnter income:\n'))
             print('Income was added!\n')
-        elif user_command == 3:
+        elif user_command == '3':
             transfer_money(card_number,
                            input('\nTransfer\nEnter card number:\n'))
-        elif user_command == 4:
+        elif user_command == '4':
             close_account(card_number)
-        elif user_command == 5:
+        elif user_command == '5':
             print('\nYou have successfully logged out\n')
             main_menu()
-        elif user_command == 0:
+        elif user_command == '0':
             print('\nBye!')
             exit()
 
