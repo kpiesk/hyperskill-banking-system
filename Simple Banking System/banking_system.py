@@ -1,9 +1,9 @@
-import random
-import string
+from random import sample, seed
+from string import digits
 import sqlite3
 
-
-global conn, cur
+conn = sqlite3.connect('card.s3db')
+cur = conn.cursor()
 
 
 class Card:
@@ -26,14 +26,15 @@ class Card:
 
     @staticmethod
     def generate_account_id():
-        random.seed()
-        return ''.join(random.sample(string.digits, 9))
+        seed()
+        return ''.join(sample(digits, 9))
 
     @staticmethod
     def generate_card_pin():
-        random.seed()
-        return ''.join(random.sample(string.digits, 4))
+        seed()
+        return ''.join(sample(digits, 4))
 
+    # gets the last number of the credit card
     def get_checksum(self):
         number = self.BIN + self.account_id
         return calc_checksum(number)
@@ -44,10 +45,12 @@ class Card:
 
     def insert_into_database(self):
         cur.execute('INSERT INTO card VALUES(?, ?, ?, ?)',
-                    (self.record_id, self.card_number, self.card_pin, self.balance))
+                    (self.record_id, self.card_number, self.card_pin,
+                     self.balance))
         conn.commit()
 
 
+# the main menu of the banking system
 def main_menu():
     while True:
         user_command = int(input('1. Create an account\n'
@@ -62,12 +65,14 @@ def main_menu():
             exit()
 
 
+# creates a new card (bank account) and prints basic information of it
 def create_new_card():
     new_card = Card()
     print('\nYour card has been created')
     new_card.get_card_info()
 
 
+# allows the user to login to their account using the card number and pin
 def log_in():
     card_number = input('\nEnter your card number:\n')
     card_pin = input('Enter your PIN:\n')
@@ -83,6 +88,8 @@ def log_in():
         main_menu()
 
 
+# log in menu of the banking system
+# (is only shown once successfully logged in)
 def log_in_menu(card_number):
     while True:
         user_command = int(input('1. Balance\n'
@@ -97,7 +104,8 @@ def log_in_menu(card_number):
             add_balance(card_number, input('\nEnter income:\n'))
             print('Income was added!\n')
         elif user_command == 3:
-            transfer_money(card_number, input('\nTransfer\nEnter card number:\n'))
+            transfer_money(card_number,
+                           input('\nTransfer\nEnter card number:\n'))
         elif user_command == 4:
             close_account(card_number)
         elif user_command == 5:
@@ -108,23 +116,31 @@ def log_in_menu(card_number):
             exit()
 
 
+# gets and prints the current account's balance
 def get_card_balance(card_number):
     cur.execute('SELECT balance FROM card WHERE number=?', (card_number,))
     print(f'\nBalance: {cur.fetchone()[0]}\n')
 
 
+# adds the given amount of money to the given account
 def add_balance(card_number, money):
     cur.execute('UPDATE card SET balance = balance+? WHERE number=?',
                 (money, card_number))
     conn.commit()
 
 
+# transfers the money from the current bank account
+# to another existing in the database
 def transfer_money(sender_card, receiver_card):
+    # checks whether the receiver's card number passes Luhn algorithm
     if calc_checksum(receiver_card[:-1]) != receiver_card[-1]:
-        print('Probably you made mistake in the card number. Please try again!\n')
+        print('Probably you made mistake in the card number. '
+              'Please try again!\n')
+    # checks whether the receiver's card exists in the database
     elif not check_card_exists(receiver_card):
         print('Such a card does not exist.\n')
-    elif check_card_same(sender_card, receiver_card):
+    # checks whether the user tries to transfer money to the same account
+    elif sender_card == receiver_card:
         print('You can\'t transfer money to the same account!\n')
     else:
         money = float(input('Enter how much money you want to transfer:\n'))
@@ -133,11 +149,14 @@ def transfer_money(sender_card, receiver_card):
         if cur.fetchone()[0] < money:
             print('Not enough money!\n')
         else:
+            # adds money to the receiver's account
             add_balance(receiver_card, money)
+            # takes away money from the sender's account
             add_balance(sender_card, -1 * money)
             print('Success!\n')
 
 
+# uses Luhn algorithm to check whether the card number is valid
 def calc_checksum(number):
     number = [int(x) * 2 if (i + 1) % 2 != 0 else int(x)
               for i, x in enumerate(number)]
@@ -146,6 +165,7 @@ def calc_checksum(number):
     return '0' if control_number % 10 == 0 else str(10 - control_number % 10)
 
 
+# checks whether the given card number exists in the database
 def check_card_exists(card_number):
     cur.execute('SELECT number FROM card WHERE number=?', (card_number,))
     if cur.fetchone() is None:
@@ -153,33 +173,28 @@ def check_card_exists(card_number):
     return True
 
 
-def check_card_same(sender_card, receiver_card):
-    if sender_card == receiver_card:
-        return True
-    return False
-
-
+# deletes the account with the given card number from the database
 def close_account(card_number):
     cur.execute('DELETE FROM card WHERE number=?', (card_number,))
     conn.commit()
     print('\nThe account has been closed!\n')
 
 
+# creates a table card in the database
 def create_database():
-    global cur, conn
-    conn = sqlite3.connect('card.s3db')
-    cur = conn.cursor()
     with conn:
         cur.execute('CREATE TABLE IF NOT EXISTS card '
                     '(id INTEGER, number TEXT, pin TEXT, '
-                    'balance INTEGER DEFAULT  0);')
+                    'balance INTEGER DEFAULT  0, PRIMARY KEY (id));')
 
 
+# optional function for deleting the card tables
 def delete_table():
     cur.execute('DROP TABLE card')
     conn.commit()
 
 
+# optional function for printing the card table
 def print_table():
     for row in cur.execute('SELECT * FROM card'):
         print(row)
